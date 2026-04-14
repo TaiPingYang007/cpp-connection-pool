@@ -1,0 +1,15 @@
+# CMake 构建目录
+/build/
+
+# 编译产物目录
+/bin/
+
+# 本地运行配置
+/config/connection_pool.conf
+
+# 常见的 CMake 导出文件
+/compile_commands.json
+
+# 编辑器和系统生成的杂项文件
+.DS_Store
+.vscode/

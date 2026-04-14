@@ -1,0 +1,11 @@
+# MySQL 配置
+ip=127.0.0.1
+port=3306
+username=your_user
+password=your_password
+dbname=your_database
+
+# 连接池配置
+initSize=10
+maxSize=1024
+connectionTimeout=1000
