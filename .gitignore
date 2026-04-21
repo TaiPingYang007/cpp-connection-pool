@@ -7,6 +7,9 @@
 # 本地运行配置
 /config/connection_pool.conf
 
+# 本地工具文件
+.codex
+
 # 常见的 CMake 导出文件
 /compile_commands.json
 

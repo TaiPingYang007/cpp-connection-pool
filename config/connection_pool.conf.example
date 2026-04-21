@@ -1,9 +1,12 @@
 # MySQL 配置
-ip=127.0.0.1
+# Docker Compose 默认连接信息。
+# 如果你本地直连 MySQL，请把 ip 改为 127.0.0.1 或实际地址，
+# 并同步修改 username / password / dbname。
+ip=mysql_db
 port=3306
-username=your_user
-password=your_password
-dbname=your_database
+username=connection_pool_app
+password=wang112233
+dbname=connection_pool_dev
 
 # 连接池配置
 initSize=10

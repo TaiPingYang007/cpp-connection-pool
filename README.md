@@ -1,56 +1,174 @@
 # 基于 C++11 的高并发数据库连接池
 
-## Introduction
+一个从零实现的 MySQL 连接池示例项目，使用 `C++11 + MySQL C API + CMake` 构建，提供了本地编译方式和基于 Docker Compose 的一键验证方式。
 
-这是一个从零实现的高性能 C++ 数据库连接池，旨在解决高并发场景下频繁建立 MySQL 连接导致的性能瓶颈与资源泄漏问题，并可作为集群聊天服务器的底层数据库访问模块复用。
+当前仓库既适合作为连接池实现的学习样例，也适合作为后续聊天服务器、业务服务的数据访问基础模块。
 
-项目结构上，`src/` 与 `include/` 负责连接池核心实现，`example/` 提供独立示例程序，`config/` 负责运行时配置，便于他人快速接入与验证。
+## 项目特点
 
-## Tech Stack
+- 使用 `std::shared_ptr<MySQL>` 和自定义删除器实现连接自动归还
+- 使用生产者 / 消费者双条件变量降低高并发下的无效唤醒
+- 支持按配置预热连接、按需补充连接
+- 支持配置文件解析与合法性校验
+- 支持通过 Docker Compose 快速拉起 MySQL 并完成验证
 
-- C++11
-- MySQL C-API
-- 多线程与并发控制（pthread）
-- CMake
+## 目录结构
 
-## Key Features
+```text
+.
+├── CMakeLists.txt
+├── Dockerfile
+├── docker-compose.yml
+├── autobuild.sh
+├── config/
+│   └── connection_pool.conf.example
+├── docker/mysql/init/
+│   └── 01-init-connection-pool.sql
+├── example/
+│   └── main.cpp
+├── include/
+└── src/
+```
 
-### 1. RAII 机制与智能指针防漏
+## 运行前说明
 
-项目没有采用“业务代码手动归还连接”的脆弱设计，而是将连接对象交由 `std::shared_ptr<MySQL>` 托管，并为其注入自定义 Deleter，接管默认析构路径。  
-当业务线程结束使用后，连接不会被误删，而是自动回收到连接池队列中，实现连接生命周期的统一闭环管理，彻底规避遗漏归还、异常分支泄漏等典型问题。
+- 程序实际读取的配置文件是 `config/connection_pool.conf`
+- 仓库中只保留模板文件 `config/connection_pool.conf.example`
+- 如果本地直接运行，请先复制模板并按你的环境修改
+- Docker 方式会在镜像构建时自动从模板生成运行配置
+- 对当前仓库来说：
+  - 容器内运行时使用 `mysql_db` 作为数据库地址
+  - 宿主机本地运行时，如果连接的是 Docker 暴露出来的 MySQL，则应使用 `127.0.0.1:3306`
 
-### 2. 双条件变量防惊群
+说明：当前 `example/main.cpp` 主要用于并发借还连接测试，重点验证“连接能否成功建立与复用”；它不会依赖额外业务表结构，因此用一个空的 MySQL 数据库也可以跑通。
 
-连接池没有使用单条件变量混合承载生产与消费信号，而是拆分为生产者 `std::condition_variable` 与消费者 `std::condition_variable` 两套独立等待通道。  
-在高并发场景下，通过 `notify_one()` 精准唤醒目标线程，避免“一个事件唤醒一批无效线程”的惊群效应，减少无意义竞争、上下文切换与 CPU 空转，提升并发调度效率。
+## 本地编译运行
 
-### 3. 动态预热与弹性扩容
+### 依赖
 
-连接池启动时按 `_initSize` 进行预热，先建立一批可直接服务请求的数据库连接，避免系统冷启动时业务线程首批请求被迫阻塞。  
-当空闲连接数跌破低水位后，后台生产线程会自动补仓，在业务线程无感知的前提下完成连接补充，使瞬时流量洪峰下的资源分配更平滑，降低抖动和毛刺。
+- C++11 编译器
+- CMake 3.10+
+- MySQL 客户端开发库，例如 Ubuntu 上的 `libmysqlclient-dev`
 
-### 4. 优雅退出机制
-
-项目通过 `std::atomic<bool>` 作为线程生命周期总开关，在单例析构阶段统一关闭生产流程，并通过 `notify_all()` 唤醒挂起线程，随后使用 `join()` 完成后台线程回收。  
-同时引入“借出连接计数 + 条件变量等待归还”机制，确保析构发生时，外部业务线程手中的连接要么安全归还，要么被平滑销毁，避免悬空访问与资源清理不完整的问题。
-
-### 5. 配置外置化与超时等待
-
-项目将数据库地址、账号密码、连接池容量、连接获取超时时间统一外置到 `key=value` 配置文件中，由独立配置模块负责读取、解析与校验。  
-消费者获取连接时使用 `wait_for()` 执行带上限的阻塞等待，在连接池耗尽或数据库异常时能够按超时返回 `nullptr`，为业务层预留降级、重试和快速失败的空间。
-
-## Performance
-
-在 50+ 瞬时并发洪峰的压力测试下，连接分配过程保持平滑，无死锁与明显阻塞放大现象；单次批处理耗时约 1.2s。  
-说明：当前本机一次实测约为 0.5s，历史测试约为 1.2s；该耗时包含业务模拟耗时，最终数据会随机器配置、数据库状态与网络环境略有波动。
-
-## Build & Run
+### 步骤
 
 ```bash
-cp config/connection_pool.conf.example config/connection_pool.conf
-# 按本机 MySQL 环境修改用户名、密码和库名
-
 bash ./autobuild.sh
 ./bin/test_pool
 ```
+
+如果你没有本地安装 MySQL，也可以先启动 Docker 中的数据库容器，再在宿主机运行本程序。此时本地配置应类似：
+
+```conf
+ip=127.0.0.1
+port=3306
+username=connection_pool_app
+password=wang112233
+dbname=connection_pool_dev
+```
+
+## Docker Compose 运行
+
+### 这套编排会启动什么
+
+- `cpp_app`：编译并运行示例程序
+- `mysql_db`：官方 `mysql:8.0` 数据库容器
+- `mysql_data`：MySQL 数据卷，用于持久化数据库数据
+
+### 初始化内容
+
+MySQL 首次启动时会执行：
+
+- [docker/mysql/init/01-init-connection-pool.sql](docker/mysql/init/01-init-connection-pool.sql)
+
+它会创建：
+
+- 数据库：`connection_pool_dev`
+- 用户：`connection_pool_app`
+- 密码：`wang112233`
+
+`config/connection_pool.conf.example` 默认已经指向 Docker Compose 服务名 `mysql_db`，因此容器之间可以直接通信。
+
+说明：Docker 容器里的应用连接数据库时使用 `mysql_db`；如果你是在宿主机直接运行 `./bin/test_pool`，则应连接 Docker 映射出来的 `127.0.0.1:3306`。
+
+### 启动
+
+```bash
+docker compose up --build
+```
+
+### 常用命令
+
+后台启动：
+
+```bash
+docker compose up -d --build
+```
+
+查看服务状态：
+
+```bash
+docker compose ps
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
+
+停止并删除容器：
+
+```bash
+docker compose down
+```
+
+如果你修改了初始化 SQL、数据库用户名或密码，希望让 MySQL 从零重新初始化：
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+## 关键设计说明
+
+### 为什么 Docker 内不能写 `127.0.0.1`
+
+在 Docker Compose 网络中：
+
+- `127.0.0.1` 表示当前容器自己
+- `mysql_db` 才表示 MySQL 服务容器
+
+所以应用配置里必须写：
+
+```conf
+ip=mysql_db
+```
+
+### 为什么需要 `healthcheck`
+
+`depends_on` 只能保证启动顺序，不能保证 MySQL 已经完成初始化。  
+本项目在 `docker-compose.yml` 中为 `mysql_db` 配置了健康检查，只有数据库真正可连接后，`cpp_app` 才会启动。
+
+### 为什么需要数据卷
+
+MySQL 数据存放在容器内的 `/var/lib/mysql`。  
+通过 `mysql_data` 数据卷挂载后，即使容器删除，数据库数据仍然可以保留。
+
+## 成功运行的标志
+
+当你看到以下现象时，说明项目已经跑通：
+
+- `mysql_db` 变成 `Healthy`
+- 日志里出现初始化 SQL 执行信息
+- `cpp_app` 输出多条“成功拿到连接”
+- 最终出现 `cpp_app exited with code 0`
+
+这里的 `exited with code 0` 是正常结束，不是失败。因为当前示例程序属于一次性压力测试，跑完就退出。
+
+## 适合继续扩展的方向
+
+- 增加真实 SQL 读写测试，而不只是连接借还测试
+- 为连接对象增加空闲超时回收机制
+- 引入更多运行时指标，例如活跃连接数、等待次数、超时次数
+- 将当前连接池库接入聊天服务器或其他业务服务

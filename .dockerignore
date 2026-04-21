@@ -1,0 +1,7 @@
+build/
+bin/
+.git/
+.codex
+.vscode/
+.DS_Store
+config/connection_pool.conf
