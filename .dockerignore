@@ -1,8 +1,13 @@
 build/
 bin/
 .git/
-.codex
+.codex/
 .vscode/
+.idea/
 .DS_Store
 config/connection_pool.conf
-graphify-out
+graphify-out/
+.gitignore
+.dockerignore
+README.md
+*.log
