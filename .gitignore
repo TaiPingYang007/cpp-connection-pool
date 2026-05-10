@@ -9,6 +9,7 @@
 
 # 本地工具文件
 .codex
+graphify-out
 
 # 常见的 CMake 导出文件
 /compile_commands.json
