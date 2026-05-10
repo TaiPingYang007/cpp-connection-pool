@@ -5,3 +5,4 @@ bin/
 .vscode/
 .DS_Store
 config/connection_pool.conf
+graphify-out
