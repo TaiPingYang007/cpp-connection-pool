@@ -1,13 +1,4 @@
 services:
-  cpp_app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: cpp_app
-    depends_on:
-      mysql_db:
-        condition: service_healthy
-
   mysql_db:
     image: mysql:8.0
     container_name: mysql_db
