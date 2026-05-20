@@ -33,7 +33,7 @@ ConnectionPool::ConnectionPool()
 
     _isRunning = true; // 打开线程的电源总开关
 
-    // 启动线程，，并保存到_produceThread成员变量中
+    // 启动线程，并保存到_produceThread成员变量中
     _produceThread = std::thread([this]()
                                  { produceConnectionTask(); });
 }
