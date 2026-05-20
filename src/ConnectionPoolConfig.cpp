@@ -223,11 +223,20 @@ std::string ConnectionPoolConfig::trim(const std::string &text)
 
 // 把字符串解析成 int
 bool ConnectionPoolConfig::parseInt(const std::string &text, int &value)
+// text：你要解析的字符串，比如 "3306"
+// value：如果解析成功，就把结果写进这个变量里
 {
     try
     {
         std::size_t pos = 0;
         int number = std::stoi(text, &pos);
+        /*  stoi 的意思就是：string to int。
+                它会尝试把字符串前面能解析的部分变成整数。
+            例如：
+                "3306" -> 3306
+                "123abc" -> 它会先吃出 123
+                "abc" -> 直接失败，抛异常
+        */
 
         // 如果没把整个字符串吃完，说明不是纯数字
         if (pos != text.size())
